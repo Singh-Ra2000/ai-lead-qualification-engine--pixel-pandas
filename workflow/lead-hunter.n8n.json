@@ -1,0 +1,279 @@
+{
+  "name": "AI Lead Qualification Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "n1",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.apify.com/v2/acts/harvestapi~linkedin-post-search/runs/last/dataset/items?token=YOUR_APIFY_TOKEN&clean=true",
+        "options": {}
+      },
+      "id": "n2",
+      "name": "Fetch Apify Dataset",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "savedPostUrl",
+              "value": "={{ $json.linkedinUrl }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "savedLinkedinUrl",
+              "value": "={{ $json.author.linkedinUrl }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "savedKeyword",
+              "value": "={{ $json.query.search }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "n3",
+      "name": "Snapshot Metadata",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are a lead qualification assistant for Pixel Pandas, a design and development agency based in India.\n\nPixel Pandas offers: UI/UX Design, Web Development, App Development, Branding, Logo Design, Social Media Creatives.\n\nYOUR SINGLE MOST IMPORTANT RULE:\nYou must answer only ONE question about each post:\n\"Is this person or company trying to PAY someone externally to do design or development work for them RIGHT NOW?\"\n\nIf the answer is not a DEFINITE YES, score 1. No exceptions. No benefit of the doubt.\n\nHARD DISQUALIFY (SCORE 1 ALWAYS)\n1. A designer, developer, or creative professional sharing their own work, opinions, or portfolio\n2. Thought leadership: tips, advice, opinions, lessons learned about design/tech/business\n3. Company culture: employee spotlights, team announcements, office life\n4. AI/tech commentary: discussing AI tools, trends, or industry shifts\n5. Educational content: sharing research, studies, or learning resources\n6. A designer promoting their own services or availability\n7. Hiring a full-time in-house employee (not an agency or freelancer)\n8. General business advice or productivity content\n9. A post that just MENTIONS design without actively SEEKING design help\n10. Any post where the author themselves works in design, development, or creative fields\n\nQUALIFY (SCORE 7+) ONLY IF ALL ARE TRUE\n- Author is a business owner, founder, startup, or non-design company\n- They are ACTIVELY REQUESTING design/development work to be done for them\n- They need someone EXTERNAL to do the work (agency or freelancer)\n- The post is a direct ask, not just mentioning design in passing\n\nSCORING\n9-10: Clear hiring intent + budget stated + contact info provided\n7-8: Clear hiring intent + project described, no budget\n4-6: NEVER USE. When in doubt, score 1-3\n1-3: Disqualified\n\nREAL EXAMPLES\n\nREJECT (Score 1): \"AI-powered design is only as strong as the designer behind it...\"\nWHY: Designer sharing their opinion. Not hiring anyone.\n\nREJECT (Score 1): \"Faces of [Company], meet our team member...\"\nWHY: Employee spotlight. Not hiring externally.\n\nREJECT (Score 1): \"Education readiness for the age of AI...\"\nWHY: Thought leadership. Nothing to do with hiring design services.\n\nREJECT (Score 1): \"Not an agency, not alone. Here's how I work with clients...\"\nWHY: A web designer describing their own approach. They ARE the service provider.\n\nREJECT (Score 1): \"Junior UX hiring is broken. Here's what I've learned...\"\nWHY: UX professional sharing insights. Not buying anything.\n\nREJECT (Score 1): \"I removed Senior and Lead from my titles. My DMs are open for freelance opportunities...\"\nWHY: Designer looking for work. Exact opposite of a lead.\n\nQUALIFY (Score 8): \"We're looking for a Framer Web Designer to help refine our existing website. Budget: Rs.6,000-10,000. Send portfolio to [email]\"\nWHY: Actively hiring. Clear scope. Budget given. Contact provided.\n\nQUALIFY (Score 7): \"Can anyone recommend a good branding agency for our fintech startup? Looking to rebrand before our Series A.\"\nWHY: Founder seeking an agency. Clear business need.\n\nQUALIFY (Score 9): \"We need a mobile app designed for our logistics company. Looking for a UI/UX agency, budget Rs.2L, timeline 6 weeks. DM me.\"\nWHY: Clear project, budget, timeline, direct ask.\n\nFINAL CHECK BEFORE SCORING\n1. Is the author a BUYER or a SELLER of design services? If seller, score 1\n2. Are they asking for design help or just talking about design? If just talking, score 1\n3. Would Pixel Pandas send them a proposal after reading this? If not obviously yes, score 1\n\nRespond ONLY with valid JSON. No explanation. No markdown. No extra text.",
+              "role": "system"
+            },
+            {
+              "content": "=Analyse this LinkedIn post and return a JSON qualification result.\n\nPOST DETAILS:\nAuthor name: {{ $json.author.name }}\nAuthor headline: {{ $json.author.info }}\nPosted: {{ $json.postedAt.postedAgoText }}\nPost content:\n\"\"\"\n{{ $json.content }}\n\"\"\"\n\nReturn ONLY this exact JSON, no extra text:\n{\n  \"qualified\": true or false,\n  \"score\": 1 to 10,\n  \"scoreReason\": \"one sentence explaining the score\",\n  \"personName\": \"full name from post\",\n  \"companyName\": \"company name or null\",\n  \"serviceRequired\": \"one Pixel Pandas service or Unknown\",\n  \"emailAddress\": \"email if in post or null\",\n  \"contactMethod\": \"Email or LinkedIn DM or Comment\",\n  \"outreachDraft\": \"3-4 sentence warm personalised message as Pixel Pandas referencing something specific from their post. null if not qualified.\"\n}"
+            }
+          ]
+        },
+        "simplify": false,
+        "options": {}
+      },
+      "id": "n4",
+      "name": "Qualify Post (GPT-4o mini)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        660,
+        0
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * n8n Code node: Parse LLM output + re-attach source metadata\n * Mode: Run Once for All Items | Language: JavaScript\n *\n * Input: items from the OpenAI \"Message a Model\" node (Simplify Output OFF).\n * The OpenAI node drops upstream fields, so post URLs and the matched\n * keyword are snapshotted earlier by an Edit Fields node\n * (savedPostUrl, savedLinkedinUrl, savedKeyword) and re-joined here.\n */\n\nconst items = [];\n\nfor (const item of $input.all()) {\n  try {\n    const outputs = item.json.output;\n\n    for (const out of outputs) {\n      const text = out.content[0].text;\n\n      // Models sometimes wrap JSON in markdown fences. Strip them.\n      const cleanText = text.replace(/```json|```/g, '').trim();\n      const parsed = JSON.parse(cleanText);\n\n      // Re-attach metadata the LLM never sees\n      parsed.linkedinUrl = item.json.savedLinkedinUrl || null;\n      parsed.postUrl = item.json.savedPostUrl || null;\n      parsed.keywordMatched = item.json.savedKeyword || null;\n\n      items.push({ json: parsed });\n    }\n  } catch (e) {\n    // Malformed response: skip this post rather than fail the whole run\n  }\n}\n\nreturn items;\n"
+      },
+      "id": "n5",
+      "name": "Parse LLM Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.score }}",
+              "rightValue": 7,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "n6",
+      "name": "Score >= 7",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_URL",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date Found": "={{ $now.format('yyyy-MM-dd') }}",
+            "Status": "New",
+            "score": "={{ $json.score }}",
+            "personName": "={{ $json.personName }}",
+            "companyName": "={{ $json.companyName }}",
+            "LinkedIn URL": "={{ $json.linkedinUrl }}",
+            "Post URL": "={{ $json.postUrl }}",
+            "serviceRequired": "={{ $json.serviceRequired }}",
+            "emailAddress": "={{ $json.emailAddress }}",
+            "contactMethod": "={{ $json.contactMethod }}",
+            "scoreReason": "={{ $json.scoreReason }}",
+            "outreachDraft": "={{ $json.outreachDraft }}",
+            "keywordMatched": "={{ $json.keywordMatched }}"
+          },
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "n7",
+      "name": "Append Lead to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1320,
+        -80
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Apify Dataset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Apify Dataset": {
+      "main": [
+        [
+          {
+            "node": "Snapshot Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Snapshot Metadata": {
+      "main": [
+        [
+          {
+            "node": "Qualify Post (GPT-4o mini)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qualify Post (GPT-4o mini)": {
+      "main": [
+        [
+          {
+            "node": "Parse LLM Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse LLM Output": {
+      "main": [
+        [
+          {
+            "node": "Score >= 7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score >= 7": {
+      "main": [
+        [
+          {
+            "node": "Append Lead to Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata"
+  },
+  "pinData": {}
+}
